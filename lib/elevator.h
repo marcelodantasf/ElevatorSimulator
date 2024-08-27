@@ -12,15 +12,17 @@ enum Way
     UP
 };
 
+typedef enum Way way;
+
 typedef struct
 {
-    int noFloors;
+    int noButtons;
     floor* selected;
 } internalButton;
 
 typedef struct
 {
-   Way direction;
+   way direction;
    bool isPressed;
 } externalButton;
 
@@ -28,9 +30,6 @@ typedef struct
 typedef struct
 {
    floor* current;
-   //floor* selected;
-   floor* prev;
-   floor* next;
    internalButton ib;
    externalButton eb;
 } elevator;
