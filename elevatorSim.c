@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <time.h>
 
+
 typedef char* String;
 typedef struct floor floor;
 typedef struct elevator elevator;
@@ -29,6 +30,7 @@ struct chamadas {
 struct building {
     elevator *elevators;
     int num_elevators;
+
     chamadas *calls;
 };
 
@@ -69,7 +71,7 @@ void mostrarElevadores(elevator *elevador, int i) {
         printf("\n");
     }
 
-    
+
 }
 
 void subir(elevator *elevador) {
@@ -190,147 +192,139 @@ char *overwriteComma(char *str) {
   return newString;
 }
 
-/*void receive(char str[], building *p) {
-
-  if (str[0] == 'A') {
-    char *newString = strtok(str, KEY);
-    newString = strtok(NULL, KEY);
-    printf("string after decode: %s\n", newString);
-
-    floor *recebido = (floor *)malloc(sizeof(floor));
-    recebido->floor_number = atoi(newString);
-
-    printf("floor level read: %d\n", recebido->floor_number);
-
-    p->maximo = recebido;
-
-    printf("max floor level: %d\n\n", p->maximo->id);
-    return;
-  }
-
-  if (str[0] == 'E') {
-    printf("INPUT: %s\n", str);
-
+void receive(char str[], building *p) {
     str = overwriteComma(str);
 
-    char *newString = strtok(str, KEY);
-    printf("%s\n", newString);
+    if (str[0] == 'A') {  // Adicionar andar
+        char *newString = strtok(str, KEY);
+        newString = strtok(NULL, KEY);
+        printf("string after decode: %s\n", newString);
 
-    int elevatorNo = atoi(newString + 1);
-    printf("elevator read: %d\n", elevatorNo);
+        int floor_number = atoi(newString);
+        printf("floor level read: %d\n", floor_number);
 
-    p->elevators[0] = malloc(sizeof(elevator));
+        // Cria um novo floor
+        floor *novo_andar = malloc(sizeof(floor));
+        novo_andar->floor_number = floor_number;
+        novo_andar->next = NULL;
+        novo_andar->prev = NULL;
 
-    newString = strtok(NULL, KEY);
-    printf("%s\n", newString);
+        // Adiciona esse novo andar na rota do elevador 0 (ou pode-se modificar para ser dinâmico)
+        insertOnRoute(&p->elevators[0], novo_andar);
 
-    int currentFloor = atoi(newString);
-    printf("current floor read: %d\n", currentFloor);
-
-    floor *current = malloc(sizeof(floor));
-    current->floor_number = currentFloor;
-
-    newString = strtok(NULL, KEY);
-    printf("%s\n", newString);
-
-    bool way = (strcmp(newString, "S") == 0) ? true : false;
-    printf("direction read: %d\n", way);
-
-    newString = strtok(NULL, KEY);
-    printf("%s\n", newString);
-
-    int count = 0;
-    char *backup = newString;
-
-    while (newString != NULL) {
-      count++;
-      newString = strtok(NULL, KEY);
-    }
-    printf("count: %d\n", count);
-
-    int floors[3];
-    int i = 0;
-    int n = 0;
-
-    while (n < count) {
-      if (backup[i] != '_') {
-        if (atoi(&backup[i]) == 0)
-          i++;
-        floors[n] = atoi(&backup[i]);
-        printf("[%d]\n", floors[n]);
-        n++;
-      }
-      i++;
+        return;
     }
 
-    chamadas *calls = malloc(sizeof(chamadas) * count);
+    if (str[0] == 'E') {  // Atualizar status do elevador
+        printf("INPUT: %s\n", str);
 
-    for (int i = 0; i < count; i++) {
-      calls[i].dir = way;
-      calls[i].tempo = 0;
+        char *newString = strtok(str, KEY);
+        printf("%s\n", newString);
 
-      if (i < 1) {
-        calls[i].origem = current;
-        // inserir mecanismo de busca de floor
-        calls[i].destino = malloc(sizeof(floor));
-        calls[i].destino->floor_number = floors[i];
-      } else {
-        calls[i].origem = calls[i - 1].destino;
-        calls[i].destino = malloc(sizeof(floor));
-        calls[i].destino->floor_number = floor[i];
-      }
+        int elevatorNo = atoi(newString + 1);  // Lê o número do elevador
+        printf("elevator read: %d\n", elevatorNo);
+
+        if (elevatorNo < 0 || elevatorNo >= p->num_elevators) {
+            printf("Número de elevador inválido\n");
+            return;
+        }
+
+        elevator *current_elevator = &p->elevators[elevatorNo];  // Seleciona o elevador correto
+
+        newString = strtok(NULL, KEY);
+        int currentFloor = atoi(newString);  // Atualiza o andar atual do elevador
+        printf("current floor read: %d\n", currentFloor);
+
+        current_elevator->current_floor = &current_elevator->floors[currentFloor];
+
+        newString = strtok(NULL, KEY);
+        bool direction = (strcmp(newString, "S") == 0) ? true : false;  // Lê a direção (S = subindo, D = descendo)
+        printf("direction read: %d\n", direction);
+
+        current_elevator->direction = direction;
+
+        newString = strtok(NULL, KEY);
+        printf("%s\n", newString);
+
+        int floors[10];  // Um buffer para os andares
+        int count = 0;
+
+        // Processa a lista de andares
+        while (newString != NULL) {
+            floors[count++] = atoi(newString);
+            newString = strtok(NULL, KEY);
+        }
+
+        printf("Lista de andares:\n");
+        for (int i = 0; i < count; i++) {
+            printf("[%d]\n", floors[i]);
+
+            // Cria o floor de destino
+            floor *destino = malloc(sizeof(floor));
+            destino->floor_number = floors[i];
+            destino->next = NULL;
+            destino->prev = NULL;
+
+            // Insere na rota do elevador
+            insertOnRoute(current_elevator, destino);
+        }
+
+        return;
     }
 
-    for (int i = 0; i < count; i++)
-      p->elevadores[0]->listaChamadas[i] = calls[i];
-    // atenção: isso vai inserir as chamadas nas primeiras posições do vetor de
-    // chamadas do elevador, não no final da fila de chamadas do elevador.
-    return;
-  }
+    if (str[0] == 'T') {  // Adicionar chamada
+        printf("\nINPUT: %s\n", str);
 
-  if (str[0] == 'T') {
-    printf("\nINPUT: %s\n", str);
+        char *newString = strtok(str, KEY);
+        int tempoNo = atoi(newString + 1);  // Lê o tempo
+        printf("tempo lido: %d\n", tempoNo);
 
-    char *newString = strtok(str, KEY);
-    printf("%s\n", newString);
+        newString = strtok(NULL, KEY);
+        printf("pessoa lida: %s\n", newString);  // A pessoa não está sendo usada aqui
 
-    int tempoNo = atoi(newString + 1);
-    printf("tempo lido: %d\n", tempoNo);
+        newString = strtok(NULL, KEY);
+        bool direction = (strcmp(newString, "S") == 0) ? true : false;  // Lê a direção
+        printf("direcao lida: %d\n", direction);
 
-    newString = strtok(NULL, KEY);
-    printf("pessoa lida: %s\n", newString);
-    // a pessoa eh meio inutil entao sla vey toma ai teu printf
+        newString = strtok(NULL, KEY);
+        int origem = atoi(newString);  // Lê o andar de origem
+        printf("origem: floor %d\n", origem);
 
-    newString = strtok(NULL, KEY);
-    bool way = (strcmp(newString, "S") == 0) ? true : false;
-    printf("direcao lida: %d\n", way);
+        newString = strtok(NULL, KEY);
+        int destino = atoi(newString);  // Lê o andar de destino
+        printf("destino: floor %d\n", destino);
 
-    newString = strtok(NULL, KEY);
-    int origem = atoi(newString);
-    printf("origem: floor %d\n", origem);
+        // Cria uma nova chamada
+        chamadas *nova_chamada = malloc(sizeof(chamadas));
+        nova_chamada->dir = direction;
+        nova_chamada->tempo = tempoNo;
 
-    newString = strtok(NULL, KEY);
-    int destino = atoi(newString);
-    printf("destino: floor %d\n", destino);
+        // Cria o floor de origem e destino
+        nova_chamada->origem = malloc(sizeof(floor));
+        nova_chamada->origem->floor_number = origem;
 
-    chamadas *call = malloc(sizeof(chamadas));
-    call->dir = way;
-    call->tempo = tempoNo;
+        nova_chamada->destino = malloc(sizeof(floor));
+        nova_chamada->destino->floor_number = destino;
 
-    call->origem = malloc(sizeof(floor));
-    call->origem->id = origem;
+        nova_chamada->prox = NULL;
 
-    call->destino = malloc(sizeof(floor));
-    call->destino->id = destino;
+        // Insere a nova chamada na lista de chamadas do prédio
+        if (p->calls == NULL) {
+            p->calls = nova_chamada;
+        } else {
+            chamadas *aux = p->calls;
+            while (aux->prox != NULL) {
+                aux = aux->prox;
+            }
+            aux->prox = nova_chamada;
+        }
 
-    p->elevadores[0]->listaChamadas[0] = *call;
-    // atenção: esses dados vão ser inseridos na primeira posição do vetor de
-    // chamadas do elevador, não no final, pois a fila de chamadas do elevador
-    // não possui referência para o final.
+        return;
+    }
 
-    return;
-  }
-} */
+    printf("Formato invalido, digite as instrucoes conforme as regras\n");
+}
+
 
 int main() {
   int segundos = 0;
@@ -343,18 +337,18 @@ int main() {
     floor andar4 = {4, NULL, NULL};
     floor andar5 = {5, NULL, NULL};
     floor andar6 = {6, NULL, NULL};
-    
+
     insertOnRoute(&meuPredio.elevators[0], &andar6);
     insertOnRoute(&meuPredio.elevators[0], &andar2);
     insertOnRoute(&meuPredio.elevators[0], &andar3);
 
     while (1) {
-        
+
       segundos++;
         printf("Tempo: %d seg\n\n", segundos);
       moverElevadores(&meuPredio);
       sleep(1);
-        
+
     }
 
     return 0;
