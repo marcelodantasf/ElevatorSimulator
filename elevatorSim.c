@@ -41,6 +41,7 @@ struct building {
 };
 
 void mostrarElevadores(elevator *elevador, int i) {
+    printf("------------------\n");
     printf("[E%d]\n", i + 1);
     printf("Direção atual: %s\n", elevador->direction ? "subindo" : "descendo");
 
@@ -93,13 +94,21 @@ void descer(elevator *elevador) {
     }
 }
 
+void standBy(elevator *elevador) {
+    while (elevador->current_floor && elevador->current_floor != &elevador->floors[0])
+        elevador->current_floor = elevador->current_floor->prev;
+
+    elevador->direction = false;
+    printf("Elevador entrou em modo stand-by\n");
+}
+
 void move(elevator *elevador) {
     if (elevador->direction && elevador->rotaSubindo) {
         subir(elevador);
     } else if (!elevador->direction && elevador->rotaDescendo) {
         descer(elevador);
-    } else {
-        printf("Elevador parado no andar %d\n", elevador->current_floor->floor_number);
+    } else if(!elevador->rotaSubindo && !elevador->rotaDescendo) {
+        standBy(elevador);
     }
 }
 
