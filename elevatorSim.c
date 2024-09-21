@@ -40,6 +40,7 @@ struct elevador {
     int inatividade;
     char percorrido[1000];
     int andares_percorridos;
+int deslocamento;
 };
 
 struct predio {
@@ -71,7 +72,7 @@ void irParaCima(elevador *elevador, int seg) {
         char nova_string[50];
         snprintf(nova_string, sizeof(nova_string), "%s(%s) -> ", cc, ss);
         strcat(elevador->percorrido, nova_string);
-        
+        elevador->deslocamento = seg;
         andar *aux = elevador->rotaCima;
         elevador->rotaCima = elevador->rotaCima->proximo;
         free(aux);
@@ -95,6 +96,14 @@ void irParaBaixo(elevador *elevador, int seg) {
     }
 
     if (elevador->andar_atual->numero_andar == elevador->rotaBaixo->numero_andar) {
+        char cc[10];
+        sprintf(cc, "%d", elevador->andar_atual->numero_andar);
+        char ss[10];
+        sprintf(ss, "%d", seg);
+        char nova_string[50];
+        snprintf(nova_string, sizeof(nova_string), "%s(%s) -> ", cc, ss);
+        strcat(elevador->percorrido, nova_string);
+        elevador->deslocamento = seg;
         andar *aux = elevador->rotaBaixo;
         elevador->rotaBaixo = elevador->rotaBaixo->proximo;
         free(aux);
@@ -131,13 +140,15 @@ void mover(elevador *elevador, int seg) {
 
 void moverElevadores(predio *predio, int seg) {
     int andares = 0;
+    int deslocas = 0;
     for (int i = 0; i < predio->num_elevadores; i++) {
         andares += predio->elevadores[i].andares_percorridos;
+        deslocas += predio->elevadores[i].deslocamento;
         mostrarElevadores(&predio->elevadores[i], i);
         mover(&predio->elevadores[i], seg);
     }
     printf("\n\n-- Resumo do conjunto de elevadores --\n");
-    printf("tempo de deslocamento dos elevadores: %d\n", andares);
+    printf("tempo de deslocamento dos elevadores: %d\n", deslocas);
     printf("número de andares percorrido pelos elevadores: %d\n", andares);
 }
 
