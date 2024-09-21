@@ -2,355 +2,292 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <time.h>
+#include <string.h>
 
 typedef char* String;
-typedef struct floor floor;
-typedef struct elevator elevator;
+typedef struct andar andar;
+typedef struct elevador elevador;
 typedef struct chamadas chamadas;
-typedef struct building building;
+typedef struct predio predio;
 
 #define KEY "_"
 
-struct floor {
-    int floor_number;
-    floor *prev;
-    floor *next;
+typedef enum {
+    SUBINDO,
+    DESCENDO, 
+    PARADO
+} Direcao;
+
+struct andar {
+    int numero_andar;
+    andar *anterior;
+    andar *proximo;
 };
 
 struct chamadas {
-    floor *destino;
-    floor *origem;
+    andar *destino;
+    andar *origem;
     int tempo;
-    bool dir;
-    struct chamadas *prox;
+    Direcao direcao;
+    struct chamadas *proxima;
 };
 
-struct elevator {
-    floor *rotaSubindo;
-    floor *rotaDescendo;
-    floor *current_floor;
-    floor *floors;
-    bool direction; // true = subindo, false = descendo
+struct elevador {
+    andar *rotaCima;
+    andar *rotaBaixo;
+    andar *andar_atual;
+    Direcao direcao; 
+    int inatividade;
+    char percorrido[1000];
+    int andares_percorridos;
 };
 
-struct building {
-    elevator *elevators;
-    int num_elevators;
-    chamadas *calls;
+struct predio {
+    elevador *elevadores;
+    int num_elevadores;
+    int num_andares; 
 };
 
-void mostrarElevadores(elevator *elevador, int i) {
-    printf("------------------\n");
-    printf("[E%d]\n", i + 1);
-    printf("Direção atual: %s\n", elevador->direction ? "subindo" : "descendo");
-
-    if (elevador->current_floor->floor_number == 0) {
-        printf("Andar atual: térreo\n\n");
-    } else {
-        printf("Andar atual: %d\n\n", elevador->current_floor->floor_number);
-    }
+void mostrarElevadores(elevador *elevador, int i) {
+    printf("\n| E%d: ", i + 1);
+    printf("%s\n", elevador->percorrido);
 }
 
-void subir(elevator *elevador) {
-    if (!elevador->rotaSubindo) return;  
+void irParaCima(elevador *elevador, int seg) {
+    if (!elevador->rotaCima) return;  
 
-    floor *and = elevador->current_floor;
+    andar *a = elevador->andar_atual;
 
-    if (and->next && and->floor_number < elevador->rotaSubindo->floor_number) {
-        elevador->current_floor = and->next;
+    if (a->proximo && a->numero_andar < elevador->rotaCima->numero_andar) {
+        elevador->andar_atual = a->proximo;
+        elevador->andares_percorridos++;
     }
 
-    if (elevador->current_floor->floor_number == elevador->rotaSubindo->floor_number) {
-        floor *aux = elevador->rotaSubindo;
-        elevador->rotaSubindo = elevador->rotaSubindo->next;
+    if (elevador->andar_atual->numero_andar == elevador->rotaCima->numero_andar) {
+        char cc[10];
+        sprintf(cc, "%d", elevador->andar_atual->numero_andar);
+        char ss[10];
+        sprintf(ss, "%d", seg);
+        char nova_string[50];
+        snprintf(nova_string, sizeof(nova_string), "%s(%s) -> ", cc, ss);
+        strcat(elevador->percorrido, nova_string);
+        
+        andar *aux = elevador->rotaCima;
+        elevador->rotaCima = elevador->rotaCima->proximo;
         free(aux);
     }
 
-    if (!elevador->rotaSubindo) {
-        elevador->direction = false;  
+    if (!elevador->rotaCima && !elevador->rotaBaixo) {
+        elevador->direcao = PARADO;
     }
+
+    elevador->inatividade = 0;
 }
 
-void descer(elevator *elevador) {
-    if (!elevador->rotaDescendo) return;  
+void irParaBaixo(elevador *elevador, int seg) {
+    if (!elevador->rotaBaixo) return;  
 
-    floor *and = elevador->current_floor;
+    andar *a = elevador->andar_atual;
 
-    // Verifique se o andar atual é maior que o andar de destino
-    if (and->prev && and->floor_number > elevador->rotaDescendo->floor_number) {
-        elevador->current_floor = and->prev;
+    if (a->anterior && a->numero_andar > elevador->rotaBaixo->numero_andar) {
+        elevador->andar_atual = a->anterior;
+        elevador->andares_percorridos++;
     }
 
-    if (elevador->current_floor->floor_number == elevador->rotaDescendo->floor_number) {
-       
-        floor *aux = elevador->rotaDescendo;
-        elevador->rotaDescendo = elevador->rotaDescendo->next;
+    if (elevador->andar_atual->numero_andar == elevador->rotaBaixo->numero_andar) {
+        andar *aux = elevador->rotaBaixo;
+        elevador->rotaBaixo = elevador->rotaBaixo->proximo;
         free(aux);
     }
 
-    if (!elevador->rotaDescendo) {
-        elevador->direction = true;  
+    if (!elevador->rotaCima && !elevador->rotaBaixo) {
+        elevador->direcao = PARADO;
+    }
+
+    elevador->inatividade = 0;
+}
+
+void modoEsperar(elevador *elevador, int seg) {
+    elevador->inatividade++;
+    if (elevador->inatividade > 2 && elevador->andar_atual->numero_andar != 0) {
+        elevador->andar_atual = elevador->andar_atual->anterior;
+
+        if (elevador->andar_atual->numero_andar == 0) {
+            elevador->direcao = PARADO;
+            elevador->inatividade = 0;
+        }
     }
 }
 
-void standBy(elevator *elevador) {
-    while (elevador->current_floor && elevador->current_floor != &elevador->floors[0])
-        elevador->current_floor = elevador->current_floor->prev;
-
-    elevador->direction = false;
-    printf("Elevador entrou em modo stand-by\n");
-}
-
-void move(elevator *elevador) {
-    if (elevador->direction && elevador->rotaSubindo) {
-        subir(elevador);
-    } else if (!elevador->direction && elevador->rotaDescendo) {
-        descer(elevador);
-    } else if(!elevador->rotaSubindo && !elevador->rotaDescendo) {
-        standBy(elevador);
+void mover(elevador *elevador, int seg) {
+    if (elevador->direcao == SUBINDO && elevador->rotaCima) {
+        irParaCima(elevador, seg);
+    } else if (elevador->direcao == DESCENDO && elevador->rotaBaixo) {
+        irParaBaixo(elevador, seg);
+    } else if (elevador->direcao == PARADO) {
+        modoEsperar(elevador, seg);
     }
 }
 
-void moverElevadores(building *predio) {
-    for (int i = 0; i < predio->num_elevators; i++) {
-        mostrarElevadores(&predio->elevators[i], i);
-        move(&predio->elevators[i]);
+void moverElevadores(predio *predio, int seg) {
+    int andares = 0;
+    for (int i = 0; i < predio->num_elevadores; i++) {
+        andares += predio->elevadores[i].andares_percorridos;
+        mostrarElevadores(&predio->elevadores[i], i);
+        mover(&predio->elevadores[i], seg);
     }
+    printf("\n\n-- Resumo do conjunto de elevadores --\n");
+    printf("tempo de deslocamento dos elevadores: %d\n", andares);
+    printf("número de andares percorrido pelos elevadores: %d\n", andares);
 }
 
-void init(struct building *predio, int num_floors, int num_elevators) {
-    predio->num_elevators = num_elevators;
-    predio->elevators = malloc(num_elevators * sizeof(elevator));
+void inicializar(struct predio *predio, int num_andares, int num_elevadores) {
+    predio->num_andares = num_andares; 
+    predio->num_elevadores = num_elevadores;
+    predio->elevadores = malloc(num_elevadores * sizeof(elevador));
 
-    if (!predio->elevators) {
+    if (!predio->elevadores) {
         printf("Erro ao alocar memória para elevadores\n");
         return;
     }
 
-    for (int i = 0; i < num_elevators; i++) {
-        predio->elevators[i].rotaSubindo = NULL;
-        predio->elevators[i].rotaDescendo = NULL;
-        predio->elevators[i].floors = malloc(num_floors * sizeof(floor));
-        predio->elevators[i].direction = true;
+    for (int i = 0; i < num_elevadores; i++) {
+        predio->elevadores[i].rotaCima = NULL;
+        predio->elevadores[i].rotaBaixo = NULL;
+        predio->elevadores[i].andares_percorridos = 0;
+        predio->elevadores[i].andar_atual = malloc(sizeof(andar) * num_andares);
+        predio->elevadores[i].direcao = PARADO;
+        predio->elevadores[i].inatividade = 0;
 
-        if (!predio->elevators[i].floors) {
+        if (!predio->elevadores[i].andar_atual) {
             printf("Erro ao alocar memória para andares\n");
             return;
         }
 
-        for (int j = 0; j < num_floors; j++) {
-            predio->elevators[i].floors[j].floor_number = j;
-            predio->elevators[i].floors[j].next = (j < num_floors - 1) ? &predio->elevators[i].floors[j + 1] : NULL;
-            predio->elevators[i].floors[j].prev = (j > 0) ? &predio->elevators[i].floors[j - 1] : NULL;
+        for (int j = 0; j < num_andares; j++) {
+            predio->elevadores[i].andar_atual[j].numero_andar = j;
+            predio->elevadores[i].andar_atual[j].proximo = (j < num_andares - 1) ? &predio->elevadores[i].andar_atual[j + 1] : NULL;
+            predio->elevadores[i].andar_atual[j].anterior = (j > 0) ? &predio->elevadores[i].andar_atual[j - 1] : NULL;
         }
 
-        predio->elevators[i].current_floor = &predio->elevators[i].floors[0];
+        predio->elevadores[i].andar_atual = &predio->elevadores[i].andar_atual[0];
     }
 }
 
-void insertOnRoute(elevator *elevador, floor *andar) {
-    floor *novo = malloc(sizeof(floor));
-    if (!novo) {
+int escolherElevador(predio *predio, andar *novo_andar) {
+    int melhorElevador = -1;
+    int numAndares = predio->num_andares;
+
+    for (int i = 0; i < predio->num_elevadores; i++) {
+        elevador *e = &predio->elevadores[i];
+        int distancia = abs(e->andar_atual->numero_andar - novo_andar->numero_andar);
+
+
+        if (e->direcao == PARADO || 
+            (e->direcao == SUBINDO && novo_andar->numero_andar > e->andar_atual->numero_andar) ||
+            (e->direcao == DESCENDO && novo_andar->numero_andar < e->andar_atual->numero_andar)) {
+
+
+            if (distancia < numAndares) {
+                numAndares = distancia; 
+                melhorElevador = i; 
+            }
+        }
+    }
+
+    return melhorElevador;
+}
+
+void inserirNaRota(predio *predio, andar *a) {
+    int elevadorIndex = escolherElevador(predio, a);
+    if (elevadorIndex == -1) {
+        printf("Nenhum elevador disponível para a chamada.\n");
+        return;
+    }
+
+    elevador *elevador = &predio->elevadores[elevadorIndex];
+
+    andar *novo_andar = malloc(sizeof(andar));
+    if (!novo_andar) {
         printf("Erro ao alocar memória para o andar\n");
         return;
     }
-    *novo = *andar;
-    novo->next = NULL;
+    *novo_andar = *a;
+    novo_andar->proximo = NULL;
 
-    if (elevador->direction) {
-        if (!elevador->rotaSubindo) {
-            elevador->rotaSubindo = novo;
+    if (elevador->direcao == PARADO) {
+        if (novo_andar->numero_andar > elevador->andar_atual->numero_andar) {
+            elevador->direcao = SUBINDO;
+        } else if (novo_andar->numero_andar < elevador->andar_atual->numero_andar) {
+            elevador->direcao = DESCENDO;
+        }
+    }
+
+    if (elevador->direcao == SUBINDO) {
+        if (!elevador->rotaCima) {
+            elevador->rotaCima = novo_andar;
         } else {
-            floor *aux = elevador->rotaSubindo;
-            while (aux->next && aux->next->floor_number < novo->floor_number) {
-                aux = aux->next;
+            andar *aux = elevador->rotaCima;
+            andar *prev = NULL;
+            while (aux && aux->numero_andar < novo_andar->numero_andar) {
+                prev = aux;
+                aux = aux->proximo;
             }
-            novo->next = aux->next;
-            aux->next = novo;
+            if (prev) {
+                novo_andar->proximo = aux;
+                prev->proximo = novo_andar;
+            } else { 
+                novo_andar->proximo = elevador->rotaCima;
+                elevador->rotaCima = novo_andar;
+            }
         }
-    } else {
-        if (!elevador->rotaDescendo) {
-            elevador->rotaDescendo = novo;
+    } else if (elevador->direcao == DESCENDO) {
+        if (!elevador->rotaBaixo) {
+            elevador->rotaBaixo = novo_andar;
         } else {
-            floor *aux = elevador->rotaDescendo;
-            while (aux->next && aux->next->floor_number > novo->floor_number) {
-                aux = aux->next;
+            andar *aux = elevador->rotaBaixo;
+            andar *prev = NULL;
+            while (aux && aux->numero_andar > novo_andar->numero_andar) {
+                prev = aux;
+                aux = aux->proximo;
             }
-            novo->next = aux->next;
-            aux->next = novo;
-        }
-    }
-}
-
-char *overwriteComma(char *str) {
-  char *newString = malloc(sizeof(char) * strlen(str));
-  for (int i = 0; i < strlen(str); i++) {
-    if (str[i] == ',')
-      newString[i] = '_';
-    else
-      newString[i] = str[i];
-  }
-  return newString;
-}
-
-//!(to fix): função precisa ser refatorada, 'AM' precisa definir andar máximo,
-//'T' precisa inserir função no tempo, 'En' deve "resetar" o status do elevador n
-//e as chamadas devem ser oriundas desta função.
-void decode(char str[], building *p) {
-    str = overwriteComma(str);
-
-    if (str[0] == 'A') {  // Adicionar andar
-        char *newString = strtok(str, KEY);
-        newString = strtok(NULL, KEY);
-        printf("string after decode: %s\n", newString);
-
-        int floor_number = atoi(newString);
-        printf("floor level read: %d\n", floor_number);
-
-        // Cria um novo floor
-        floor *novo_andar = malloc(sizeof(floor));
-        novo_andar->floor_number = floor_number;
-        novo_andar->next = NULL;
-        novo_andar->prev = NULL;
-
-        // Adiciona esse novo andar na rota do elevador 0 (ou pode-se modificar para ser dinâmico)
-        insertOnRoute(&p->elevators[0], novo_andar);
-
-        return;
-    }
-
-    if (str[0] == 'E') {  // Atualizar status do elevador
-        printf("INPUT: %s\n", str);
-
-        char *newString = strtok(str, KEY);
-        printf("%s\n", newString);
-
-        int elevatorNo = atoi(newString + 1);  // Lê o número do elevador
-        printf("elevator read: %d\n", elevatorNo);
-
-        if (elevatorNo < 0 || elevatorNo >= p->num_elevators) {
-            printf("Número de elevador inválido\n");
-            return;
-        }
-
-        elevator *current_elevator = &p->elevators[elevatorNo];  // Seleciona o elevador correto
-
-        newString = strtok(NULL, KEY);
-        int currentFloor = atoi(newString);  // Atualiza o andar atual do elevador
-        printf("current floor read: %d\n", currentFloor);
-
-        current_elevator->current_floor = &current_elevator->floors[currentFloor];
-
-        newString = strtok(NULL, KEY);
-        bool direction = (strcmp(newString, "S") == 0) ? true : false;  // Lê a direção (S = subindo, D = descendo)
-        printf("direction read: %d\n", direction);
-
-        current_elevator->direction = direction;
-
-        newString = strtok(NULL, KEY);
-        printf("%s\n", newString);
-
-        int floors[10];  // Um buffer para os andares
-        int count = 0;
-
-        // Processa a lista de andares
-        while (newString != NULL) {
-            floors[count++] = atoi(newString);
-            newString = strtok(NULL, KEY);
-        }
-
-        printf("Lista de andares:\n");
-        for (int i = 0; i < count; i++) {
-            printf("[%d]\n", floors[i]);
-
-            // Cria o floor de destino
-            floor *destino = malloc(sizeof(floor));
-            destino->floor_number = floors[i];
-            destino->next = NULL;
-            destino->prev = NULL;
-
-            // Insere na rota do elevador
-            insertOnRoute(current_elevator, destino);
-        }
-
-        return;
-    }
-
-    if (str[0] == 'T') {  // Adicionar chamada
-        printf("\nINPUT: %s\n", str);
-
-        char *newString = strtok(str, KEY);
-        int tempoNo = atoi(newString + 1);  // Lê o tempo
-        printf("tempo lido: %d\n", tempoNo);
-
-        newString = strtok(NULL, KEY);
-        printf("pessoa lida: %s\n", newString);  // A pessoa não está sendo usada aqui
-
-        newString = strtok(NULL, KEY);
-        bool direction = (strcmp(newString, "S") == 0) ? true : false;  // Lê a direção
-        printf("direcao lida: %d\n", direction);
-
-        newString = strtok(NULL, KEY);
-        int origem = atoi(newString);  // Lê o andar de origem
-        printf("origem: floor %d\n", origem);
-
-        newString = strtok(NULL, KEY);
-        int destino = atoi(newString);  // Lê o andar de destino
-        printf("destino: floor %d\n", destino);
-
-        // Cria uma nova chamada
-        chamadas *nova_chamada = malloc(sizeof(chamadas));
-        nova_chamada->dir = direction;
-        nova_chamada->tempo = tempoNo;
-
-        // Cria o floor de origem e destino
-        nova_chamada->origem = malloc(sizeof(floor));
-        nova_chamada->origem->floor_number = origem;
-
-        nova_chamada->destino = malloc(sizeof(floor));
-        nova_chamada->destino->floor_number = destino;
-
-        nova_chamada->prox = NULL;
-
-        // Insere a nova chamada na lista de chamadas do prédio
-        if (p->calls == NULL) {
-            p->calls = nova_chamada;
-        } else {
-            chamadas *aux = p->calls;
-            while (aux->prox != NULL) {
-                aux = aux->prox;
+            if (prev) {
+                novo_andar->proximo = aux;
+                prev->proximo = novo_andar;
+            } else { 
+                novo_andar->proximo = elevador->rotaBaixo;
+                elevador->rotaBaixo = novo_andar;
             }
-            aux->prox = nova_chamada;
         }
-
-        return;
     }
-
-    printf("Formato invalido, digite as instrucoes conforme as regras\n");
 }
 
 int main() {
+    struct predio meuPredio;
+    inicializar(&meuPredio, 20, 3);
+
+    andar andares[6] = {
+        {1, NULL, NULL},
+        {2, NULL, NULL},
+        {3, NULL, NULL},
+        {4, NULL, NULL},
+        {5, NULL, NULL},
+        {15, NULL, NULL}
+    };
+
+    inserirNaRota(&meuPredio, &andares[5]);
+    inserirNaRota(&meuPredio, &andares[1]); 
+    inserirNaRota(&meuPredio, &andares[2]); 
+    inserirNaRota(&meuPredio, &andares[0]); 
+
     int segundos = 0;
-    struct building meuPredio;
-    init(&meuPredio, 10, 1);
-
-    floor andar1 = {1, NULL, NULL};
-    floor andar2 = {2, NULL, NULL};
-    floor andar3 = {3, NULL, NULL};
-    floor andar4 = {4, NULL, NULL};
-    floor andar5 = {5, NULL, NULL};
-    floor andar6 = {6, NULL, NULL};
-
-    insertOnRoute(&meuPredio.elevators[0], &andar6);
-    insertOnRoute(&meuPredio.elevators[0], &andar2);
-    insertOnRoute(&meuPredio.elevators[0], &andar3);
-
     while (1) {
+        system("clear");
         segundos++;
-        printf("Tempo: %d seg\n\n", segundos);
-        moverElevadores(&meuPredio);
+        printf("\n\nSegundo: %d\n", segundos-1);
+        moverElevadores(&meuPredio, segundos);
         sleep(1);
+        
     }
 
     return 0;
