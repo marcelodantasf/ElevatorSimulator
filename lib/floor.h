@@ -4,6 +4,6 @@
 #include <stdlib.h>
 #include "util.h"
 
-typedef node floor;
+//typedef node floor;
 
 #endif

@@ -10,45 +10,32 @@
 typedef enum 
 {
     DOWN,
-    UP
+    UP,
+    STOPPED
 } way;
-
-//typedef enum Way way;
-
-/*typedef struct
-{
-    int noButtons;
-    floor* selected;
-} internalButton;
 
 typedef struct
 {
-   way direction;
-   bool isPressed;
-} externalButton; */
-
+    floor* origin;
+    floor* destiny;
+    way dir;
+    int time;
+    struct call* next;
+} call;
 
 typedef struct
 {
    floor* current;
-   //internalButton ib;
-   //externalButton eb;
-   floor* selected;
+   int inactivity;
+   way direction;
+   call* calls;
 } elevator;
 
-typedef struct
-{
-    floor* destiny;
-    way dir;
-} route;
+void standByMode(elevator* e, floor* ground);
 
-elevator standByMode(elevator* e, floor* ground);
+call addToRoute(floor* f, elevator* e, way d);
 
-//void toggleButton(elevator* e);
-
-route addToRoute(floor* f, elevator* e, way d);
-
-elevator whichCloser(floor* f, building b);
+elevator* algorithm(floor* f, building b);
 
 void move(elevator* e);
 

@@ -3,16 +3,23 @@
 #include "floor.h"
 #include "elevator.h"
 #include "building.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#define KEY "_"
 
 typedef char* String;
 
 typedef struct
 {
-    int id;
-    struct node* prev;
-    struct node* next;
-} node;
+    int number;
+    struct floor* prev;
+    struct floor* next;
+} floor;
 
-route trimString(String str, building b);
+char *overwriteComma(char *str);
+
+void* trimString(String str, building* b, int noElevators);
 
 #endif

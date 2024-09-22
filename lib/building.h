@@ -8,11 +8,16 @@
 
 typedef struct
 {
-    String name;
     int noFloors;
+    int noElevators;
     floor* floors;
-    floor ground;
-    elevator mainElevator;
+    floor* ground;
+    elevator* elevators;
+    call* calls;
 } building;
+
+void initialize(building* b, int noElevators, int noFloors);
+
+void* trimString(String str, building* b, int noElevators);
 
 #endif
