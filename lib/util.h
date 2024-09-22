@@ -20,6 +20,4 @@ typedef struct
 
 char *overwriteComma(char *str);
 
-void* trimString(String str, building* b, int noElevators);
-
 #endif
